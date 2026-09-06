@@ -3,59 +3,95 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Пулково 3D — интерактивная модель аэропорта</title>
-  <meta name="description" content="Интерактивная трёхмерная модель аэропорта Пулково (LED/ULLI): терминалы, перрон, ВПП, авиатехника." />
+  <title>Пулково — 3D</title>
+  <meta name="description" content="Интерактивная трёхмерная модель аэропорта Пулково (LED / ULLI)." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>✈️</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 </head>
 <body>
   <canvas id="scene"></canvas>
 
+  <!-- Заставка -->
   <div id="loader">
     <div class="loader__inner">
-      <div class="loader__plane">✈</div>
-      <div class="loader__title">ПУЛКОВО 3D</div>
+      <div class="loader__mark">LED</div>
+      <div class="loader__title">Пулково</div>
+      <div class="loader__sub">Трёхмерная модель аэропорта</div>
       <div class="loader__bar"><i id="loader-bar"></i></div>
-      <div class="loader__hint" id="loader-hint">Построение сцены…</div>
+      <div class="loader__hint" id="loader-hint">Построение сцены</div>
     </div>
   </div>
 
+  <!-- Верхняя строка -->
   <header id="topbar">
     <div class="brand">
-      <span class="brand__code">LED</span>
+      <span class="brand__mark">LED</span>
       <span class="brand__name">Пулково</span>
-      <span class="brand__sub">Санкт-Петербург · ULLI</span>
     </div>
-    <div id="clock" class="clock">
-      <span id="clock-time">12:00</span>
-      <span id="clock-label">день</span>
+    <div class="top-right">
+      <span id="clock">13:00</span>
+      <button id="tools-btn" title="Инструменты (T)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7">
+          <circle cx="12" cy="12" r="3.2" /><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6" />
+        </svg>
+      </button>
     </div>
   </header>
 
-  <aside id="panel">
-    <button id="panel-toggle" title="Свернуть панель">⟨</button>
+  <div id="veil"></div>
 
-    <section class="grp">
-      <h3>Камера</h3>
-      <div class="views" id="views"></div>
-      <label class="row">
-        <span>Облёт по кругу</span>
-        <input type="checkbox" id="orbit-auto" />
-      </label>
-      <label class="row">
-        <span>Свободный полёт (F)</span>
-        <input type="checkbox" id="fly-mode" />
-      </label>
-    </section>
+  <!-- Титры главы -->
+  <div id="chapter">
+    <div class="ch__index"><span id="ch-num">01</span><span class="ch__of">/ 09</span></div>
+    <h1 id="ch-title">Пулково</h1>
+    <p id="ch-sub">Международный аэропорт Санкт-Петербурга</p>
+  </div>
+
+  <!-- Нижняя панель навигации -->
+  <nav id="nav">
+    <button id="prev" class="nav__btn" title="Назад (←)">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 5l-7 7 7 7" /></svg>
+    </button>
+    <button id="play" class="nav__btn" title="Пауза (P)">
+      <svg id="icon-pause" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="7" y="5" width="3.4" height="14" rx="1" /><rect x="13.6" y="5" width="3.4" height="14" rx="1" /></svg>
+      <svg id="icon-play" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" hidden><path d="M8 5l11 7-11 7z" /></svg>
+    </button>
+    <div id="dots" class="dots"></div>
+    <button id="next" class="nav__btn nav__btn--primary" title="Далее (→, пробел, клик)">
+      <span>Далее</span>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5l7 7-7 7" /></svg>
+    </button>
+  </nav>
+
+  <div id="progress"><i id="progress-bar"></i></div>
+
+  <!-- Панель инструментов -->
+  <aside id="tools" class="hidden">
+    <div class="tools__head">
+      <span>Инструменты</span>
+      <button id="tools-close">×</button>
+    </div>
 
     <section class="grp">
       <h3>Время суток</h3>
-      <input type="range" id="time-of-day" min="0" max="24" step="0.1" value="12" />
+      <input type="range" id="time-of-day" min="0" max="24" step="0.1" value="13" />
       <div class="presets">
-        <button data-time="6.5">Рассвет</button>
-        <button data-time="12">День</button>
+        <button data-time="6.5">Утро</button>
+        <button data-time="13">День</button>
         <button data-time="19.5">Закат</button>
-        <button data-time="23">Ночь</button>
+        <button data-time="22.5">Ночь</button>
       </div>
+    </section>
+
+    <section class="grp">
+      <h3>Отображение</h3>
+      <label class="row"><span>Разрез терминала</span><input type="checkbox" id="cutaway" /></label>
+      <label class="row"><span>Каркас</span><input type="checkbox" id="wireframe" /></label>
+      <label class="row"><span>Подписи объектов</span><input type="checkbox" id="labels" checked /></label>
+      <label class="row"><span>Движение техники</span><input type="checkbox" id="animate" checked /></label>
+      <label class="row"><span>Тени</span><input type="checkbox" id="shadows" checked /></label>
     </section>
 
     <section class="grp">
@@ -64,35 +100,19 @@
     </section>
 
     <section class="grp">
-      <h3>Отображение</h3>
-      <label class="row"><span>Каркас (wireframe)</span><input type="checkbox" id="wireframe" /></label>
-      <label class="row"><span>Тени</span><input type="checkbox" id="shadows" checked /></label>
-      <label class="row"><span>Подписи объектов</span><input type="checkbox" id="labels" checked /></label>
-      <label class="row"><span>Разрез терминала</span><input type="checkbox" id="cutaway" /></label>
-      <label class="row"><span>Движение техники</span><input type="checkbox" id="animate" checked /></label>
-    </section>
-
-    <section class="grp">
-      <h3>Скорость анимации</h3>
-      <input type="range" id="speed" min="0" max="8" step="0.1" value="1" />
-      <div class="hint" id="speed-val">×1.0</div>
+      <h3>Клавиши</h3>
+      <div class="keys">
+        <div><kbd>→</kbd> <kbd>пробел</kbd> далее</div>
+        <div><kbd>←</kbd> назад</div>
+        <div><kbd>1</kbd>…<kbd>9</kbd> глава</div>
+        <div><kbd>P</kbd> пауза движения камеры</div>
+        <div><kbd>H</kbd> скрыть интерфейс</div>
+        <div><kbd>T</kbd> эта панель</div>
+      </div>
     </section>
   </aside>
 
-  <div id="info" class="hidden">
-    <button id="info-close">×</button>
-    <h2 id="info-title"></h2>
-    <div id="info-tag"></div>
-    <p id="info-text"></p>
-    <dl id="info-facts"></dl>
-  </div>
-
-  <div id="hint">
-    <b>ЛКМ</b> вращать · <b>ПКМ</b> перемещать · <b>колесо</b> зум · <b>клик по объекту</b> — информация ·
-    <b>F</b> свободный полёт (WASD + Shift) · <b>1…6</b> ракурсы · <b>H</b> скрыть интерфейс
-  </div>
-
-  <div id="compass"><i></i></div>
+  <div id="hint">Клик — следующая глава · перетаскивание — осмотреться</div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

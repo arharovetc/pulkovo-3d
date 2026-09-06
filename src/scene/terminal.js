@@ -1,278 +1,331 @@
 import * as THREE from 'three';
 import { MAT, EMIT } from '../utils/materials.js';
-import { box, slab, group, describe, textTexture, rand } from '../utils/helpers.js';
+import { box, sharpBox, slab, group, describe, textTexture } from '../utils/helpers.js';
 import { TERMINAL, GATES } from './layout.js';
 
 /**
- * Пассажирский терминал Пулково-1 (введён в 2013 г.).
- * Узнаваемые черты: золотистая складчатая кровля с квадратными
- * световыми воронками, сплошное остекление фасада, галерея выходов.
+ * Пассажирский терминал Пулково-1 (2013).
  *
- * Возвращает { root, shellParts, interior } — оболочка скрывается
- * в режиме «разрез терминала».
+ * Кровля — объёмная складка-«гармошка»: профиль выдавливается на всю
+ * глубину здания, поэтому у неё есть настоящая толщина и торцы,
+ * а не бумажная поверхность. В долинах складок — квадратные световые
+ * фонари, узнаваемая черта аэровокзала.
  */
+
+const H_PARAPET = 2.6;      // глухой цоколь
+const H_FACADE = 19.5;      // верх остекления
+const ROOF_T = 1.8;         // толщина плиты кровли
+const FOLD_AMP = 6.2;       // высота складки
+const FOLDS = 7;            // число складок по фасаду
+
 export function createTerminal() {
   const root = group('Терминал Пулково-1');
   root.position.set(TERMINAL.cx, 0, TERMINAL.cz);
 
   const W = TERMINAL.w;
   const D = TERMINAL.d;
-  const H = 21;                     // высота фасада до карниза
-  const shell = group('shell');     // всё, что прячется в разрезе
+
+  const shell = group('shell');        // прячется в режиме разреза
   const interior = group('interior');
   root.add(shell, interior);
 
-  /* ---------------- Основание и стилобат ---------------- */
-  const podium = box(W + 26, 1.6, D + 22, MAT.concrete, 0, 0, 0);
-  root.add(podium);
+  /* ------------------------- стилобат и пол ------------------------- */
+  root.add(sharpBox(W + 30, 1.4, D + 26, MAT.concrete, 0, 0, 0));
+  interior.add(slab(W - 2, D - 2, MAT.floorInside, 0, 1.45, 0));
 
-  const floor = slab(W, D, MAT.floorInside, 0, 1.62, 0);
-  interior.add(floor);
+  /* ---------------------------- кровля ------------------------------ */
+  const roofW = W + 26;
+  const roofD = D + 20;
+  const roof = foldedRoof(roofW, roofD);
+  shell.add(roof);
 
-  // Второй уровень (галерея вылета)
-  const mezz = box(W - 40, 1.0, 44, MAT.wallLight, 0, 8.4, 34);
-  interior.add(mezz);
-
-  /* ---------------- Складчатая кровля ---------------- */
-  const roof = createFoldedRoof(W + 22, D + 18, H);
-  shell.add(roof.mesh, roof.funnels, roof.fascia);
-
-  /* ---------------- Остекление фасадов ---------------- */
-  const glazing = group('glazing');
-  const facades = [
-    { w: W, x: 0, z: D / 2, rot: 0 },              // южный (привокзальная площадь)
-    { w: W, x: 0, z: -D / 2, rot: Math.PI },       // северный (перрон)
-    { w: D, x: W / 2, z: 0, rot: -Math.PI / 2 },   // восточный
-    { w: D, x: -W / 2, z: 0, rot: Math.PI / 2 },   // западный
-  ];
-  for (const f of facades) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(f.w, H - 1.6), MAT.glassTerminal);
-    wall.position.set(f.x, 1.6 + (H - 1.6) / 2, f.z);
-    wall.rotation.y = f.rot;
-    glazing.add(wall);
-
-    // вертикальные импосты
-    const n = Math.round(f.w / 6);
-    const post = new THREE.BoxGeometry(0.34, H - 1.6, 0.5);
-    const posts = new THREE.InstancedMesh(post, MAT.mullion, n + 1);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, f.rot, 0));
-    const s = new THREE.Vector3(1, 1, 1);
-    const p = new THREE.Vector3();
-    for (let i = 0; i <= n; i++) {
-      const t = -f.w / 2 + (i * f.w) / n;
-      p.set(f.x + Math.cos(f.rot) * t, 1.6 + (H - 1.6) / 2, f.z - Math.sin(f.rot) * t);
-      m.compose(p, q, s);
-      posts.setMatrixAt(i, m);
-    }
-    posts.instanceMatrix.needsUpdate = true;
-    posts.castShadow = true;
-    glazing.add(posts);
-
-    // горизонтальные ригели
-    for (const y of [7.5, 14]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(f.w, 0.4, 0.6), MAT.mullion);
-      rail.position.set(f.x, y, f.z);
-      rail.rotation.y = f.rot;
-      glazing.add(rail);
-    }
-  }
+  /* ---------------------------- фасады ------------------------------ */
+  // В режиме разреза снимаются только фасады: кровля остаётся на месте,
+  // и зал читается именно так, как его показывают на архитектурных разрезах
+  const glazing = facades(W, D);
   shell.add(glazing);
 
-  /* ---------------- Интерьер ---------------- */
-  interior.add(createInteriorFitout(W, D));
+  /* -------------------------- конструктив --------------------------- */
+  shell.add(colonnade(W, D));
 
-  /* ---------------- Вывеска ---------------- */
+  /* --------------------------- интерьер ----------------------------- */
+  interior.add(interiorFitout(W, D));
+
+  // Ночная подсветка зала: светящиеся плоскости за остеклением —
+  // здание читается силуэтом даже в темноте
+  for (const [w, x, z, ry] of [[W - 8, 0, D / 2 - 2.5, 0], [W - 8, 0, -D / 2 + 2.5, Math.PI],
+    [D - 8, W / 2 - 2.5, 0, Math.PI / 2], [D - 8, -W / 2 + 2.5, 0, -Math.PI / 2]]) {
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, 9), EMIT.windowWarm);
+    panel.position.set(x, 7.6, z);
+    panel.rotation.y = ry;
+    interior.add(panel);
+  }
+
+  /* --------------------------- вывеска ------------------------------ */
   const signTex = textTexture('ПУЛКОВО', {
-    width: 1024, height: 200, font: 'bold 130px Arial', color: '#ffffff',
+    width: 1024, height: 180, font: '600 118px Inter, Arial', color: '#20262e',
   });
-  const sign = new THREE.Mesh(
-    new THREE.PlaneGeometry(66, 13),
-    new THREE.MeshBasicMaterial({ map: signTex, transparent: true, depthWrite: false }),
-  );
-  sign.position.set(-60, 17, D / 2 + 0.6);
-  shell.add(sign);
+  for (const [x, z, ry] of [[-58, D / 2 + 0.7, 0], [58, -D / 2 - 0.7, Math.PI]]) {
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(58, 10.2),
+      new THREE.MeshBasicMaterial({ map: signTex, transparent: true, depthWrite: false }),
+    );
+    sign.position.set(x, H_FACADE - 3.4, z);
+    sign.rotation.y = ry;
+    shell.add(sign);
+  }
 
-  const signBack = new THREE.Mesh(
-    new THREE.PlaneGeometry(66, 13),
-    new THREE.MeshBasicMaterial({ map: signTex, transparent: true, depthWrite: false }),
-  );
-  signBack.position.set(60, 17, -D / 2 - 0.6);
-  signBack.rotation.y = Math.PI;
-  shell.add(signBack);
-
-  /* ---------------- Галерея выходов и телетрапы ---------------- */
+  /* ------------------- галерея выходов и телетрапы ------------------- */
   const pier = createPier(W);
   root.add(pier.group);
 
   describe(root, {
     title: 'Терминал Пулково-1',
     tag: 'Пассажирский терминал',
-    text: 'Централизованный пассажирский терминал, открытый в декабре 2013 года. Складчатая золотистая кровля с квадратными световыми воронками стала визитной карточкой аэропорта и отсылает к отражениям невской воды.',
-    facts: [
-      ['Площадь', '≈ 105 000 м²'],
-      ['Открытие', 'декабрь 2013'],
-      ['Этажей', '4'],
-      ['Телетрапов', String(GATES.length)],
-      ['Пропускная способность', '≈ 18 млн пасс./год'],
-    ],
+    text: 'Централизованный пассажирский терминал, открытый в декабре 2013 года.',
+    facts: [['Площадь', '≈ 105 000 м²'], ['Открытие', 'декабрь 2013']],
   });
 
-  return { root, shell, interior, jetbridges: pier.jetbridges };
+  return { root, shell, glazing, interior, jetbridges: pier.jetbridges };
 }
 
 /* ------------------------------------------------------------------ */
 /*  Складчатая кровля                                                  */
 /* ------------------------------------------------------------------ */
 
-function createFoldedRoof(W, D, H) {
-  const segX = 120;
-  const segZ = 40;
-  const geo = new THREE.PlaneGeometry(W, D, segX, segZ);
-  geo.rotateX(-Math.PI / 2);
+function foldedRoof(W, D) {
+  const g = group('Кровля');
+  const base = H_FACADE;
+  const period = W / FOLDS;
 
-  const period = W / 9;           // 9 складок по фасаду
-  const amp = 4.4;
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const z = pos.getZ(i);
-    // треугольная волна поперёк здания
+  // Профиль складки: снизу ровная плита, сверху «гармошка»
+  const shape = new THREE.Shape();
+  shape.moveTo(-W / 2, base - ROOF_T);
+  shape.lineTo(W / 2, base - ROOF_T);
+
+  const steps = FOLDS * 12;
+  for (let i = steps; i >= 0; i--) {
+    const x = -W / 2 + (W * i) / steps;
     const t = ((x / period) % 1 + 1) % 1;
     const tri = 1 - Math.abs(t * 2 - 1);
-    // лёгкий подъём к центру по глубине
-    const bow = Math.cos((z / D) * Math.PI) * 1.8;
-    pos.setY(i, H + tri * amp + bow);
+    // сглаженная вершина складки — грань ловит мягкий блик
+    const h = base + FOLD_AMP * (0.15 + 0.85 * Math.sin(tri * Math.PI * 0.5) ** 1.4);
+    shape.lineTo(x, h);
   }
+  shape.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: D, bevelEnabled: false, curveSegments: 2 });
+  geo.translate(0, 0, -D / 2);
   geo.computeVertexNormals();
 
   const mesh = new THREE.Mesh(geo, MAT.roofGold);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.name = 'roof';
+  g.add(mesh);
 
-  // Карниз по периметру
-  const fascia = new THREE.Group();
-  for (const [w, d, x, z] of [[W, 1.6, 0, D / 2], [W, 1.6, 0, -D / 2], [1.6, D, W / 2, 0], [1.6, D, -W / 2, 0]]) {
-    fascia.add(box(w, 2.2, d, MAT.roofGoldDark, x, H - 1.4, z));
+  // Тонкий тёмный карниз по периметру — очерчивает объём
+  for (const [w, d, x, z] of [[W + 1.2, 0.9, 0, D / 2], [W + 1.2, 0.9, 0, -D / 2]]) {
+    g.add(sharpBox(w, 0.7, d, MAT.roofGoldDark, x, base - ROOF_T - 0.7, z));
+  }
+  for (const x of [-W / 2, W / 2]) {
+    g.add(sharpBox(0.9, 0.7, D, MAT.roofGoldDark, x, base - ROOF_T - 0.7, 0));
   }
 
-  // Квадратные световые воронки в гребнях складок
-  const funnels = new THREE.Group();
-  const funGeo = new THREE.CylinderGeometry(6.4, 2.6, 7.5, 4, 1, true);
-  const capGeo = new THREE.BoxGeometry(8.6, 0.45, 8.6);
-  for (let ix = 0; ix < 9; ix++) {
+  // Светлая подшивка потолка — снизу кровля не должна читаться глухой массой
+  const ceiling = slab(W - 2, D - 2, MAT.wallLight, 0, base - ROOF_T - 0.05, 0);
+  ceiling.rotation.x = Math.PI / 2;   // нормалью вниз, в зал
+  g.add(ceiling);
+
+  // Квадратные световые фонари в вершинах складок
+  const lanterns = group('Световые фонари');
+  const rows = 6;
+  for (let ix = 0; ix < FOLDS; ix++) {
     const x = -W / 2 + period * (ix + 0.5);
-    for (let iz = 0; iz < 5; iz++) {
-      const z = -D / 2 + (D / 5) * (iz + 0.5);
-      const y = H + amp + Math.cos((z / D) * Math.PI) * 1.8;
-      const f = new THREE.Mesh(funGeo, MAT.glassDark);
-      f.rotation.y = Math.PI / 4;
-      f.position.set(x, y - 3.4, z);
-      funnels.add(f);
-      const cap = new THREE.Mesh(capGeo, MAT.mullion);
-      cap.rotation.y = Math.PI / 4;
-      cap.position.set(x, y + 0.4, z);
-      cap.castShadow = true;
-      funnels.add(cap);
-      // ночная подсветка воронки изнутри
-      const glow = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.3, 4.4), EMIT.windowCool);
-      glow.rotation.y = Math.PI / 4;
-      glow.position.set(x, y - 6.8, z);
-      funnels.add(glow);
+    const yTop = base + FOLD_AMP;
+    for (let iz = 0; iz < rows; iz++) {
+      const z = -D / 2 + (D / rows) * (iz + 0.5);
+
+      const frame = sharpBox(7.4, 0.55, 7.4, MAT.mullion, x, yTop - 0.5, z);
+      lanterns.add(frame);
+
+      const glass = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 6.4), MAT.glassDark);
+      glass.rotation.x = -Math.PI / 2;
+      glass.position.set(x, yTop + 0.12, z);
+      lanterns.add(glass);
+
+      // проём фонаря, видимый из зала
+      const well = new THREE.Mesh(
+        new THREE.PlaneGeometry(6.2, 6.2),
+        new THREE.MeshBasicMaterial({ color: 0xf2f6fa, toneMapped: false }),
+      );
+      well.rotation.x = Math.PI / 2;
+      well.position.set(x, base - ROOF_T - 0.02, z);
+      lanterns.add(well);
+
+      // ночью фонарь светится изнутри
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 6.0), EMIT.windowCool);
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.set(x, yTop - 0.62, z);
+      lanterns.add(glow);
     }
   }
+  g.add(lanterns);
 
-  // Опорные колонны кровли (V-образные, по фасаду)
-  for (let ix = 0; ix <= 9; ix++) {
-    const x = -W / 2 + period * ix;
-    for (const z of [-D / 2 + 6, D / 2 - 6]) {
+  return g;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Фасады                                                             */
+/* ------------------------------------------------------------------ */
+
+function facades(W, D) {
+  const g = group('Фасады');
+
+  const sides = [
+    { w: W, x: 0, z: D / 2, rot: 0 },
+    { w: W, x: 0, z: -D / 2, rot: Math.PI },
+    { w: D, x: W / 2, z: 0, rot: Math.PI / 2 },
+    { w: D, x: -W / 2, z: 0, rot: -Math.PI / 2 },
+  ];
+
+  for (const f of sides) {
+    const side = new THREE.Group();
+    side.position.set(f.x, 0, f.z);
+    side.rotation.y = f.rot;
+
+    // глухой цоколь
+    side.add(sharpBox(f.w, H_PARAPET, 0.9, MAT.wallLight, 0, 1.4, 0));
+
+    // сплошное остекление
+    const glassH = H_FACADE - H_PARAPET - 1.4;
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(f.w, glassH), MAT.glassTerminal);
+    glass.position.set(0, 1.4 + H_PARAPET + glassH / 2, 0);
+    side.add(glass);
+
+    // частая сетка импостов — масштаб здания читается именно по ней
+    const n = Math.max(6, Math.round(f.w / 3.6));
+    const postGeo = new THREE.BoxGeometry(0.26, glassH, 0.42);
+    const posts = new THREE.InstancedMesh(postGeo, MAT.mullion, n + 1);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3(1, 1, 1);
+    const p = new THREE.Vector3();
+    for (let i = 0; i <= n; i++) {
+      p.set(-f.w / 2 + (i * f.w) / n, 1.4 + H_PARAPET + glassH / 2, 0);
+      m.compose(p, q, s);
+      posts.setMatrixAt(i, m);
+    }
+    posts.instanceMatrix.needsUpdate = true;
+    posts.castShadow = true;
+    side.add(posts);
+
+    // горизонтальные ригели
+    for (let k = 1; k <= 3; k++) {
+      const y = 1.4 + H_PARAPET + (glassH * k) / 4;
+      side.add(sharpBox(f.w, 0.3, 0.52, MAT.mullion, 0, y - 0.15, 0));
+    }
+
+    // верхний пояс под кровлей
+    side.add(sharpBox(f.w, 1.1, 0.8, MAT.wallGrey, 0, H_FACADE - 1.1, 0));
+
+    g.add(side);
+  }
+
+  return g;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Колонны                                                            */
+/* ------------------------------------------------------------------ */
+
+function colonnade(W, D) {
+  const g = group('Конструктив');
+  const period = W / FOLDS;
+
+  for (let i = 0; i <= FOLDS; i++) {
+    const x = -W / 2 + period * i;
+    for (const z of [-D / 2 - 6, D / 2 + 6]) {
+      // V-образная пара наклонных стоек
       for (const lean of [-1, 1]) {
-        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.75, H, 8), MAT.steel);
-        col.position.set(x + lean * 2.4, H / 2, z);
-        col.rotation.z = lean * 0.045;
+        const col = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.42, 0.62, H_FACADE, 10), MAT.steel,
+        );
+        col.position.set(x + lean * 2.6, H_FACADE / 2, z);
+        col.rotation.z = lean * 0.055;
         col.castShadow = true;
-        fascia.add(col);
+        g.add(col);
       }
     }
   }
-
-  return { mesh, funnels, fascia };
+  return g;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Интерьер                                                           */
 /* ------------------------------------------------------------------ */
 
-function createInteriorFitout(W, D) {
+function interiorFitout(W, D) {
   const g = group('Интерьер');
 
-  // Стойки регистрации — два острова
-  for (const zBase of [26, 6]) {
+  // антресоль вылета
+  g.add(sharpBox(W - 46, 0.9, 40, MAT.wallLight, 0, 8.2, 32));
+  for (let x = -(W - 60) / 2; x <= (W - 60) / 2; x += 22) {
+    g.add(sharpBox(0.7, 6.8, 0.7, MAT.steel, x, 1.45, 14));
+  }
+
+  // стойки регистрации
+  for (const zBase of [24, 4]) {
     const island = new THREE.Group();
-    island.position.set(-W / 2 + 55, 1.62, zBase);
-    const desk = box(96, 1.15, 3.2, MAT.wallLight, 0, 0, 0);
-    island.add(desk);
-    island.add(box(96, 0.15, 3.6, MAT.steel, 0, 1.15, 0));
-    for (let i = 0; i < 16; i++) {
-      const screen = box(0.7, 0.9, 0.1, EMIT.windowCool, -46 + i * 6, 1.3, -1.5);
-      island.add(screen);
-      island.add(box(1.2, 0.9, 1.2, MAT.wallGrey, -46 + i * 6, 0, 2.4));  // весы
+    island.position.set(-W / 2 + 58, 1.45, zBase);
+    island.add(box(92, 1.1, 3.0, MAT.wallLight, 0, 0, 0));
+    island.add(sharpBox(92, 0.12, 3.5, MAT.steel, 0, 1.1, 0));
+    for (let i = 0; i < 15; i++) {
+      island.add(box(0.65, 0.85, 0.1, EMIT.windowCool, -44 + i * 6.2, 1.25, -1.4));
+      island.add(box(1.1, 0.85, 1.1, MAT.wallGrey, -44 + i * 6.2, 0, 2.2));
     }
     g.add(island);
   }
 
-  // Ленты выдачи багажа (овальные карусели) в прилёте
+  // карусели выдачи багажа
   for (let i = 0; i < 3; i++) {
-    const belt = new THREE.Mesh(
-      new THREE.TorusGeometry(11, 1.5, 8, 40),
-      MAT.wallGrey,
-    );
-    belt.scale.set(1, 1, 0.42);
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(10.5, 1.4, 10, 44), MAT.wallGrey);
+    belt.scale.set(1, 1, 0.45);
     belt.rotation.x = Math.PI / 2;
-    belt.position.set(W / 2 - 46, 2.6, -40 + i * 34);
+    belt.position.set(W / 2 - 48, 2.5, -38 + i * 32);
     belt.castShadow = true;
     g.add(belt);
   }
 
-  // Колонны зала
-  const colGeo = new THREE.CylinderGeometry(0.9, 1.2, 19, 12);
-  for (let ix = 0; ix < 7; ix++) {
-    for (let iz = 0; iz < 4; iz++) {
+  // колонны зала
+  const colGeo = new THREE.CylinderGeometry(0.85, 1.1, H_FACADE - 2, 14);
+  for (let ix = 0; ix < 6; ix++) {
+    for (let iz = 0; iz < 3; iz++) {
       const c = new THREE.Mesh(colGeo, MAT.wallLight);
-      c.position.set(-W / 2 + 28 + ix * 36, 11, -D / 2 + 30 + iz * 36);
+      c.position.set(-W / 2 + 40 + ix * 38, (H_FACADE - 2) / 2, -D / 2 + 42 + iz * 42);
       c.castShadow = true;
       g.add(c);
     }
   }
 
-  // Табло вылета/прилёта
-  for (const [x, z, rotY] of [[-40, D / 2 - 12, 0], [40, -D / 2 + 12, Math.PI]]) {
-    const board = box(22, 5, 0.6, EMIT.windowCool, x, 6.5, z);
-    board.rotation.y = rotY;
+  // информационные табло
+  for (const [x, z, ry] of [[-38, D / 2 - 14, 0], [38, -D / 2 + 14, Math.PI]]) {
+    const board = box(20, 4.4, 0.5, EMIT.windowCool, x, 6.2, z);
+    board.rotation.y = ry;
     g.add(board);
-    g.add(box(0.5, 6.5, 0.5, MAT.steel, x - 10, 0, z));
-    g.add(box(0.5, 6.5, 0.5, MAT.steel, x + 10, 0, z));
   }
 
-  // Эскалаторы на второй уровень
-  for (const x of [-24, 24]) {
-    const esc = box(4.4, 1.2, 18, MAT.steel, x, 4.6, 20);
-    esc.rotation.x = -0.42;
-    g.add(esc);
-  }
-
-  // Зона ожидания — ряды кресел
-  const seatGeo = new THREE.BoxGeometry(1.5, 0.5, 1.5);
-  const rows = new THREE.InstancedMesh(seatGeo, MAT.vehicleBlue, 260);
+  // кресла зоны ожидания
+  const seatGeo = new THREE.BoxGeometry(1.5, 0.45, 1.5);
+  const rows = new THREE.InstancedMesh(seatGeo, MAT.vehicleBlue, 220);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const s = new THREE.Vector3(1, 1, 1);
   const p = new THREE.Vector3();
   let i = 0;
-  for (let r = 0; r < 10 && i < 260; r++) {
-    for (let c = 0; c < 26 && i < 260; c++) {
-      p.set(-90 + c * 7, 2.3, -D / 2 + 22 + r * 7);
+  for (let r = 0; r < 8 && i < 220; r++) {
+    for (let c = 0; c < 28 && i < 220; c++) {
+      p.set(-95 + c * 7, 2.1, -D / 2 + 26 + r * 7);
       m.compose(p, q, s);
       rows.setMatrixAt(i++, m);
     }
@@ -281,13 +334,10 @@ function createInteriorFitout(W, D) {
   rows.castShadow = true;
   g.add(rows);
 
-  // Торговая галерея — цветные боксы магазинов
-  const shopColors = [0xd45b4a, 0x4a8fd4, 0xd4a94a, 0x54b07a, 0x9b6fc9];
-  for (let k = 0; k < 10; k++) {
-    const mat = new THREE.MeshStandardMaterial({
-      color: shopColors[k % shopColors.length], roughness: 0.7,
-    });
-    const shop = box(14, 5.5, 10, mat, -W / 2 + 30 + k * 24, 1.62, -D / 2 + 12);
+  // торговая галерея — сдержанные объёмы, без цветовой каши
+  for (let k = 0; k < 9; k++) {
+    const shop = box(15, 5.0, 9, k % 3 === 0 ? MAT.wallGrey : MAT.wallLight,
+      -W / 2 + 34 + k * 25, 1.45, -D / 2 + 14);
     g.add(shop);
   }
 
@@ -300,35 +350,31 @@ function createInteriorFitout(W, D) {
 
 function createPier(W) {
   const g = group('Галерея выходов');
-  const z = TERMINAL.pierZ - TERMINAL.cz;   // локальная координата галереи
+  const z = TERMINAL.pierZ - TERMINAL.cz;
   const jetbridges = [];
+  const len = W + 120;
 
-  // Галерея-«палец» вдоль фронта стоянок
-  const gallery = box(W + 200, 9.5, 22, MAT.wallLight, 0, 6.5, z);
-  g.add(gallery);
-  const galleryGlass = new THREE.Mesh(
-    new THREE.BoxGeometry(W + 200, 5.5, 22.6), MAT.glassDark,
-  );
-  galleryGlass.position.set(0, 11.5, z);
-  g.add(galleryGlass);
-  const galleryRoof = box(W + 206, 0.9, 24, MAT.roofGoldDark, 0, 15.6, z);
-  g.add(galleryRoof);
+  // тело галереи
+  g.add(sharpBox(len, 8.4, 20, MAT.wallLight, 0, 1.2, z));
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(len + 0.5, 4.6, 20.5), MAT.glassDark);
+  glass.position.set(0, 11.4, z);
+  g.add(glass);
+  g.add(sharpBox(len + 5, 0.8, 22.5, MAT.roofGoldDark, 0, 14.2, z));
 
-  // Соединительный переход к основному зданию (от торца терминала до галереи)
-  const bridgeFar = z + 11;                  // край галереи со стороны здания
-  const bridgeNear = -TERMINAL.d / 2;        // торец терминала
-  g.add(box(52, 8, bridgeNear - bridgeFar, MAT.wallLight, 0, 6.5, (bridgeFar + bridgeNear) / 2));
+  // переход к основному зданию
+  const bridgeFar = z + 10;
+  const bridgeNear = -TERMINAL.d / 2;
+  g.add(sharpBox(46, 7.6, bridgeNear - bridgeFar, MAT.wallLight, 0, 1.2, (bridgeFar + bridgeNear) / 2));
 
-  // Опоры галереи
-  for (let x = -(W + 190) / 2; x <= (W + 190) / 2; x += 26) {
-    g.add(box(1.4, 6.5, 1.4, MAT.steel, x, 0, z + 9));
-    g.add(box(1.4, 6.5, 1.4, MAT.steel, x, 0, z - 9));
+  // опоры
+  for (let x = -len / 2 + 8; x <= len / 2 - 8; x += 24) {
+    g.add(sharpBox(1.2, 1.2, 1.2, MAT.steel, x, 0, z + 8));
+    g.add(sharpBox(1.2, 1.2, 1.2, MAT.steel, x, 0, z - 8));
   }
 
-  // Телетрапы
   for (const gate of GATES) {
     const jb = createJetbridge(gate);
-    jb.position.set(gate.x - TERMINAL.cx, 0, z - 11);
+    jb.position.set(gate.x - TERMINAL.cx, 0, z - 10);
     g.add(jb);
     jetbridges.push(jb);
   }
@@ -340,54 +386,47 @@ function createJetbridge(gate) {
   const g = new THREE.Group();
   g.name = `Телетрап ${gate.id}`;
 
-  // Ротонда у здания
-  const rot = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 6, 12), MAT.jetbridge);
-  rot.position.y = 8;
+  const rot = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.0, 5.4, 14), MAT.jetbridge);
+  rot.position.y = 8.2;
   rot.castShadow = true;
   g.add(rot);
 
-  // Подвижный рукав — поворачивается вокруг ротонды
   const arm = new THREE.Group();
-  arm.position.y = 8;
+  arm.position.y = 8.2;
   g.add(arm);
-  const len = gate.type === 'wide' ? 34 : 27;
+  const len = gate.type === 'wide' ? 32 : 26;
 
-  const tunnel = new THREE.Mesh(new THREE.BoxGeometry(4.2, 4.4, len), MAT.jetbridge);
-  tunnel.position.set(0, 0, -len / 2 - 2.5);
+  const tunnel = box(3.9, 4.0, len, MAT.jetbridge, 0, -2.0, -len / 2 - 2.2);
   tunnel.castShadow = true;
   arm.add(tunnel);
 
-  // Окна рукава
   for (const s of [-1, 1]) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.4, len - 3), MAT.glassDark);
-    win.position.set(s * 2.15, 0.5, -len / 2 - 2.5);
+    const win = sharpBox(0.12, 1.3, len - 3, MAT.glassDark, s * 2.0, -1.3, -len / 2 - 2.2);
     arm.add(win);
   }
 
-  // Кабина стыковки
-  const cab = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.4, 4.6, 12), MAT.jetbridge);
-  cab.position.set(0, -0.2, -len - 3.5);
+  const cab = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.2, 4.3, 14), MAT.jetbridge);
+  cab.position.set(0, -0.2, -len - 3.2);
   cab.castShadow = true;
   arm.add(cab);
 
-  // Опора-тележка с колёсами
   const legs = new THREE.Group();
-  legs.position.set(0, -2.4, -len * 0.62);
+  legs.position.set(0, -2.4, -len * 0.6);
   arm.add(legs);
-  legs.add(box(5.6, 0.8, 1.6, MAT.wallGrey, 0, -3.6, 0));
+  legs.add(sharpBox(5.2, 0.7, 1.5, MAT.wallGrey, 0, -3.9, 0));
   for (const s of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 5.4, 8), MAT.steel);
-    leg.position.set(s * 2.2, -1.2, 0);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 5.2, 8), MAT.steel);
+    leg.position.set(s * 2.0, -1.3, 0);
     legs.add(leg);
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.7, 12), MAT.tyre);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.65, 12), MAT.tyre);
     wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(s * 2.2, -4.2, 0);
+    wheel.position.set(s * 2.0, -4.2, 0);
     legs.add(wheel);
   }
 
   g.userData.arm = arm;
   g.userData.parkedAngle = 0;
-  g.userData.stowedAngle = gate.x < 0 ? 0.85 : -0.85;
+  g.userData.stowedAngle = gate.x < 0 ? 0.8 : -0.8;
   arm.rotation.y = g.userData.stowedAngle;
 
   return g;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 /** Детерминированный ГПСЧ — сцена одинакова при каждой загрузке. */
 export function makeRandom(seed = 20130204) {
@@ -16,11 +17,33 @@ export const rand = (a, b) => a + rnd() * (b - a);
 export const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
 
 const boxCache = new Map();
+
+/**
+ * Скруглённый параллелепипед. Фаска в несколько сантиметров ловит блик
+ * по ребру — именно она отличает архитектурный макет от набора кубов.
+ */
 function boxGeom(w, h, d) {
   const key = `${w}|${h}|${d}`;
   let g = boxCache.get(key);
-  if (!g) { g = new THREE.BoxGeometry(w, h, d); boxCache.set(key, g); }
+  if (!g) {
+    const r = THREE.MathUtils.clamp(Math.min(w, h, d) * 0.09, 0.012, 0.5);
+    g = new RoundedBoxGeometry(w, h, d, 2, r);
+    boxCache.set(key, g);
+  }
   return g;
+}
+
+/** Блок без фаски — для плит, разметки и тонких элементов. */
+const sharpCache = new Map();
+export function sharpBox(w, h, d, mat, x = 0, y = 0, z = 0) {
+  const key = `${w}|${h}|${d}`;
+  let g = sharpCache.get(key);
+  if (!g) { g = new THREE.BoxGeometry(w, h, d); sharpCache.set(key, g); }
+  const m = new THREE.Mesh(g, mat);
+  m.position.set(x, y + h / 2, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
 }
 
 /** Параллелепипед с центром основания в (x, y, z) по низу. */

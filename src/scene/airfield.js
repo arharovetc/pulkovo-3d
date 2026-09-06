@@ -30,7 +30,7 @@ export function updateAirfieldLights(nightFactor) {
     mat.visible = mat.opacity > 0.02;
   }
   for (const l of floodLights) {
-    l.intensity = f * 260000;
+    l.intensity = f * 14000;
     l.visible = f > 0.03;
   }
 }
@@ -57,7 +57,7 @@ function createTreeBelt() {
   const g = group('Лесополоса');
   const trunkGeo = new THREE.CylinderGeometry(0.6, 0.9, 6, 5);
   const foliageGeo = new THREE.ConeGeometry(4.2, 12, 6);
-  const count = 900;
+  const count = 700;
   const trunks = new THREE.InstancedMesh(trunkGeo, MAT.trunk, count);
   const crowns = new THREE.InstancedMesh(foliageGeo, MAT.foliage, count);
   trunks.castShadow = crowns.castShadow = true;
@@ -68,8 +68,8 @@ function createTreeBelt() {
 
   let i = 0;
   const rings = [
-    { r: 2600, spread: 320 },
-    { r: 3100, spread: 420 },
+    { r: 1950, spread: 260 },
+    { r: 2350, spread: 340 },
   ];
   while (i < count) {
     const ring = rings[i % rings.length];
@@ -78,8 +78,8 @@ function createTreeBelt() {
     const x = Math.cos(a) * rr * 1.35;
     const z = Math.sin(a) * rr;
     // не сажаем деревья на лётном поле
-    if (Math.abs(z) < 1500 && Math.abs(x) < 2400) { i++; continue; }
-    const sc = rand(0.7, 1.6);
+    if (Math.abs(z) < 1420 && Math.abs(x) < 2100) { i++; continue; }
+    const sc = rand(1.1, 2.4);
     p.set(x, 3 * sc, z);
     s.set(sc, sc, sc);
     m.compose(p, q, s);
@@ -304,7 +304,7 @@ export function createApron() {
   g.add(pad);
 
   // Швы бетонных плит
-  const seam = new THREE.MeshBasicMaterial({ color: 0x2c3036 });
+  const seam = new THREE.MeshBasicMaterial({ color: 0x7d7a76 });
   for (let x = -APRON.w / 2; x <= APRON.w / 2; x += 30) {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.35, APRON.d), seam);
     l.rotation.x = -Math.PI / 2;
@@ -405,7 +405,7 @@ export function createFloodMasts() {
       const lamp = box(1.6, 0.9, 2.4, EMIT.apronFlood, i * 1.35, 42.9, 0);
       mast.add(lamp);
     }
-    const flood = new THREE.PointLight(0xffe9c4, 0, 620, 1.4);
+    const flood = new THREE.PointLight(0xffe9c4, 0, 430, 2);
     flood.position.set(0, 40, 30);
     mast.add(flood);
     floodLights.push(flood);

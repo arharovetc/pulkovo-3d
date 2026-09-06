@@ -91,7 +91,7 @@ export function createTraffic() {
 
   /* ---------- Самолёты на удалённых стоянках ---------- */
   REMOTE_STANDS.forEach((st, i) => {
-    if (i === 2 || i === 5) return;
+    if (i === 4) return;
     const type = i % 2 ? 'regional' : 'narrow';
     const ac = createAircraft({
       type, livery: LIVERIES[(i + 3) % LIVERIES.length], reg: nextReg(), flight: nextFlight(),

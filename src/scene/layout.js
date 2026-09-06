@@ -22,7 +22,7 @@ export const RWY2 = {                            // южная, 10R / 28L
   thresholdWest: '10R', thresholdEast: '28L',
 };
 
-export const APRON = { cx: 0, cz: -330, w: 1180, d: 420 };
+export const APRON = { cx: 0, cz: -330, w: 980, d: 380 };
 
 export const TERMINAL = {                        // Пулково-1 (2013)
   cx: 0, cz: 40,
@@ -58,12 +58,12 @@ export const GATES = [
 
 /** Удалённые стоянки на перроне. */
 export const REMOTE_STANDS = [
-  { id: 'R21', x: -430, z: -420 },
-  { id: 'R22', x: -350, z: -420 },
-  { id: 'R23', x: -270, z: -420 },
-  { id: 'R24', x: 330, z: -420 },
-  { id: 'R25', x: 410, z: -420 },
-  { id: 'R26', x: 490, z: -420 },
+  { id: 'R21', x: -400, z: -400 },
+  { id: 'R22', x: -320, z: -400 },
+  { id: 'R23', x: -240, z: -400 },
+  { id: 'R24', x: 280, z: -400 },
+  { id: 'R25', x: 360, z: -400 },
+  { id: 'R26', x: 440, z: -400 },
 ];
 
 /** Рулёжные дорожки: набор отрезков (осевых линий). */
