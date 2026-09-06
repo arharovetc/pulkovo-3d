@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Пулково 3D — интерактивная модель аэропорта</title>
+  <meta name="description" content="Интерактивная трёхмерная модель аэропорта Пулково (LED/ULLI): терминалы, перрон, ВПП, авиатехника." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>✈️</text></svg>" />
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="loader">
+    <div class="loader__inner">
+      <div class="loader__plane">✈</div>
+      <div class="loader__title">ПУЛКОВО 3D</div>
+      <div class="loader__bar"><i id="loader-bar"></i></div>
+      <div class="loader__hint" id="loader-hint">Построение сцены…</div>
+    </div>
+  </div>
+
+  <header id="topbar">
+    <div class="brand">
+      <span class="brand__code">LED</span>
+      <span class="brand__name">Пулково</span>
+      <span class="brand__sub">Санкт-Петербург · ULLI</span>
+    </div>
+    <div id="clock" class="clock">
+      <span id="clock-time">12:00</span>
+      <span id="clock-label">день</span>
+    </div>
+  </header>
+
+  <aside id="panel">
+    <button id="panel-toggle" title="Свернуть панель">⟨</button>
+
+    <section class="grp">
+      <h3>Камера</h3>
+      <div class="views" id="views"></div>
+      <label class="row">
+        <span>Облёт по кругу</span>
+        <input type="checkbox" id="orbit-auto" />
+      </label>
+      <label class="row">
+        <span>Свободный полёт (F)</span>
+        <input type="checkbox" id="fly-mode" />
+      </label>
+    </section>
+
+    <section class="grp">
+      <h3>Время суток</h3>
+      <input type="range" id="time-of-day" min="0" max="24" step="0.1" value="12" />
+      <div class="presets">
+        <button data-time="6.5">Рассвет</button>
+        <button data-time="12">День</button>
+        <button data-time="19.5">Закат</button>
+        <button data-time="23">Ночь</button>
+      </div>
+    </section>
+
+    <section class="grp">
+      <h3>Слои</h3>
+      <div id="layers"></div>
+    </section>
+
+    <section class="grp">
+      <h3>Отображение</h3>
+      <label class="row"><span>Каркас (wireframe)</span><input type="checkbox" id="wireframe" /></label>
+      <label class="row"><span>Тени</span><input type="checkbox" id="shadows" checked /></label>
+      <label class="row"><span>Подписи объектов</span><input type="checkbox" id="labels" checked /></label>
+      <label class="row"><span>Разрез терминала</span><input type="checkbox" id="cutaway" /></label>
+      <label class="row"><span>Движение техники</span><input type="checkbox" id="animate" checked /></label>
+    </section>
+
+    <section class="grp">
+      <h3>Скорость анимации</h3>
+      <input type="range" id="speed" min="0" max="8" step="0.1" value="1" />
+      <div class="hint" id="speed-val">×1.0</div>
+    </section>
+  </aside>
+
+  <div id="info" class="hidden">
+    <button id="info-close">×</button>
+    <h2 id="info-title"></h2>
+    <div id="info-tag"></div>
+    <p id="info-text"></p>
+    <dl id="info-facts"></dl>
+  </div>
+
+  <div id="hint">
+    <b>ЛКМ</b> вращать · <b>ПКМ</b> перемещать · <b>колесо</b> зум · <b>клик по объекту</b> — информация ·
+    <b>F</b> свободный полёт (WASD + Shift) · <b>1…6</b> ракурсы · <b>H</b> скрыть интерфейс
+  </div>
+
+  <div id="compass"><i></i></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
