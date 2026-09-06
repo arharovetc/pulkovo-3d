@@ -93,3 +93,21 @@ src/
 ## Лицензия
 
 MIT
+
+## Демо
+
+Живая версия: **https://arharovetc.github.io/pulkovo-3d/**
+
+Демо публикуется из ветки `gh-pages`. Обновить:
+
+```bash
+VITE_BASE=/pulkovo-3d/ npm run build
+# затем содержимое dist/ выкладывается в ветку gh-pages
+```
+
+В `.github/workflows/deploy.yml` лежит готовый workflow, который делает это автоматически при пуше в `main`. Чтобы закоммитить его, токену GitHub CLI нужен scope `workflow`:
+
+```bash
+gh auth refresh -s workflow
+git add .github/workflows/deploy.yml && git commit -m "CI: автодеплой на GitHub Pages" && git push
+```
